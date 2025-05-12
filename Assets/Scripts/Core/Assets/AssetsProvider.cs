@@ -18,12 +18,12 @@ namespace ROC.Core.Assets
 		private readonly Dictionary<GameObject, string> _instanceToKey = new();
 		private bool _isInitialized;
 
-		public async UniTask InitializeAsync()
+		public async UniTask InitializeAsync(CancellationToken cancellationToken)
 		{
 			if (_isInitialized)
 				return;
 
-			await Addressables.InitializeAsync().ToUniTask();
+			await Addressables.InitializeAsync().ToUniTask(cancellationToken: cancellationToken);
 			_isInitialized = true;
 		}
 

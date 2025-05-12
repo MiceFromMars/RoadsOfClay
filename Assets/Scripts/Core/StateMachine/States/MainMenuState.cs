@@ -1,5 +1,6 @@
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using ROC.Core.Assets;
 using ROC.Core.Events;
 using ROC.Data.Config;
 using ROC.Data.SaveLoad;
@@ -40,11 +41,8 @@ namespace ROC.Core.StateMachine.States
 			// Create internal cancellation token source
 			_cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-			// Load player progress data
-			PlayerProgressData progressData = await _saveLoadService.LoadProgress(_cts.Token);
-
 			// Show main menu UI
-			await _uiService.Show<MainMenuScreen>("UI/MainMenuScreen", _cts.Token);
+			await _uiService.Show<MainMenuScreen>(AssetsKeys.MainMenuView, _cts.Token);
 
 			// Subscribe to UI events
 			_eventBus.Subscribe<LevelSelectedEvent>(OnLevelSelected);
@@ -84,7 +82,7 @@ namespace ROC.Core.StateMachine.States
 			await _uiService.Hide<MainMenuScreen>(_cts.Token);
 
 			// Show level selection UI
-			_levelSelectionScreen = await _uiService.Show<LevelSelectionScreen>("UI/LevelSelectionScreen", _cts.Token);
+			_levelSelectionScreen = await _uiService.Show<LevelSelectionScreen>(AssetsKeys.LevelSelectionScreen, _cts.Token);
 		}
 
 		private async void OnReturnToMainMenu(MainMenuOpenedEvent evt)

@@ -31,6 +31,7 @@ namespace ROC.Core.Assets
 		public const string GameplayHUDView = "UI/GameplayHUDView";
 		public const string PauseMenuView = "UI/PauseMenuView";
 		public const string GameOverView = "UI/GameOverView";
+		public const string LevelSelectionScreen = "UI/LevelSelectionScreen";
 
 		// Levels
 		public const string LevelPrefabPath = "Levels/Level";

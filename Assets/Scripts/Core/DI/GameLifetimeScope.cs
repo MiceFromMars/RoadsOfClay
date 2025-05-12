@@ -1,9 +1,7 @@
-using Cysharp.Threading.Tasks;
 using ROC.Core.Assets;
 using ROC.Core.Events;
 using ROC.Core.StateMachine;
 using ROC.Core.StateMachine.States;
-using ROC.Data.Config;
 using ROC.Data.SaveLoad;
 using ROC.Game.Levels;
 using ROC.Game.Player;
@@ -24,48 +22,43 @@ namespace ROC.Core.DI
 
 		protected override void Configure(IContainerBuilder builder)
 		{
-			// Core
+			RegisterCoreSystems(builder);
+
+			RegisterUISystem(builder);
+
+			RegisterGameSystems(builder);
+
+			RegisterGameStates(builder);
+
+			builder.RegisterEntryPoint<GameStateMachineInitializer>();
+		}
+
+		private void RegisterCoreSystems(IContainerBuilder builder)
+		{
 			builder.Register<LoggingService>(Lifetime.Singleton).As<ILoggingService>();
 			builder.Register<EventBus>(Lifetime.Singleton).As<IEventBus>();
 			builder.Register<GameStateMachine>(Lifetime.Singleton);
 
-			// Asset Provider registration with proper disposal handled automatically by VContainer
 			builder.Register<AssetsProvider>(Lifetime.Singleton)
 				.As<IAssetsProvider>()
 				.AsSelf();
 
-			// SaveLoadService registration with proper disposal handled automatically by VContainer
 			builder.Register<SaveLoadService>(Lifetime.Singleton)
 				.As<ISaveLoadService>()
 				.AsSelf();
-
-			// UI Service and screens
-			RegisterUISystem(builder);
-
-			// Game
-			RegisterGameSystems(builder);
-
-			// States
-			RegisterGameStates(builder);
-
-			// Entrypoint
-			builder.RegisterEntryPoint<GameEntryPoint>();
 		}
 
 		private void RegisterUISystem(IContainerBuilder builder)
 		{
-			// Register UI Service
 			builder.Register<UIService>(Lifetime.Singleton)
 				.WithParameter("uiRoot", _uiRoot)
 				.As<IUIService>()
 				.AsSelf();
 
-			// Register UI Screens - only register types that need specific dependencies
-			// Most screens will be loaded via Addressables
-			builder.Register<MainMenuScreen>(Lifetime.Transient);
-			builder.Register<LevelSelectionScreen>(Lifetime.Transient);
-			builder.Register<GameHUD>(Lifetime.Transient);
-			builder.Register<GameOverScreen>(Lifetime.Transient);
+			builder.Register<MainMenuScreen>(Lifetime.Singleton);
+			builder.Register<LevelSelectionScreen>(Lifetime.Singleton);
+			builder.Register<GameHUD>(Lifetime.Singleton);
+			builder.Register<GameOverScreen>(Lifetime.Singleton);
 		}
 
 		private void RegisterGameSystems(IContainerBuilder builder)

@@ -12,7 +12,7 @@ namespace ROC.Core.Assets
 {
 	public interface IAssetsProvider : IDisposable
 	{
-		UniTask InitializeAsync();
+		UniTask InitializeAsync(CancellationToken cancellationToken);
 		UniTask<T> LoadAssetAsync<T>(string address) where T : Object;
 		UniTask<T> LoadAssetAsync<T>(AssetReference assetReference) where T : Object;
 		UniTask<GameObject> InstantiateAsync(string address, Transform parent = null);

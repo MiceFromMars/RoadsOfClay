@@ -1,25 +1,15 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using UnityEngine;
+using ROC.UI;
 
 namespace ROC.UI.Common
 {
-	public interface IUIScreen : IDisposable
+	public interface IUIScreen : IView
 	{
-		/// <summary>
-		/// The GameObject this screen is attached to.
-		/// </summary>
-		GameObject gameObject { get; }
-
-		/// <summary>
-		/// Shows the UI screen with animation.
-		/// </summary>
-		UniTask Show(CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Hides the UI screen with animation.
-		/// </summary>
-		UniTask Hide(CancellationToken cancellationToken = default);
+		UILayer Layer { get; set; }
+		bool IsVisible { get; }
+		event Action<IUIScreen> OnScreenShown;
+		event Action<IUIScreen> OnScreenHidden;
 	}
 }
