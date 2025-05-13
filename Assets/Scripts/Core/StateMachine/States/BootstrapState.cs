@@ -8,18 +8,21 @@ namespace ROC.Core.StateMachine.States
 {
 	public class BootstrapState : IState, IDisposable
 	{
-		private readonly GameStateMachine _stateMachine;
+		private GameStateMachine _stateMachine;
 		private readonly ISaveLoadService _saveLoadService;
 		private readonly ILoggingService _logger;
 		private readonly IAssetsProvider _assetsProvider;
 
+		public GameStateMachine StateMachine
+		{
+			set { _stateMachine = value; }
+		}
+
 		public BootstrapState(
 			IAssetsProvider assetsProvider,
 			ISaveLoadService saveLoadService,
-			GameStateMachine stateMachine,
 			ILoggingService logger)
 		{
-			_stateMachine = stateMachine;
 			_saveLoadService = saveLoadService;
 			_logger = logger;
 			_assetsProvider = assetsProvider;

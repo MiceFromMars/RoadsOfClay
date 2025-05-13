@@ -21,7 +21,7 @@ namespace ROC.UI.MainMenu
 			// Set up listeners for view actions
 			_view.SetPlayButtonClickListener(OnPlayButtonClicked);
 			_view.SetLevelSelectionButtonClickListener(OnLevelSelectionButtonClicked);
-			_view.SetQuitButtonClickListener(OnQuitButtonClicked);
+			//_view.SetQuitButtonClickListener(OnQuitButtonClicked);
 		}
 
 		public override async UniTask Show(CancellationToken cancellationToken = default)
@@ -43,7 +43,7 @@ namespace ROC.UI.MainMenu
 		private void OnQuitButtonClicked()
 		{
 #if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
+			UnityEditor.EditorApplication.isPlaying = false;
 #else
 			Application.Quit();
 #endif

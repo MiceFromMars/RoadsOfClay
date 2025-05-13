@@ -27,11 +27,11 @@ namespace ROC.Core.Assets
 		public const string BossEnemy = "Enemies/BossEnemy";
 
 		//UI
-		public const string MainMenuView = "UI/MainMenuView";
+		public const string MainMenuView = "MainMenuView";
 		public const string GameplayHUDView = "UI/GameplayHUDView";
 		public const string PauseMenuView = "UI/PauseMenuView";
 		public const string GameOverView = "UI/GameOverView";
-		public const string LevelSelectionScreen = "UI/LevelSelectionScreen";
+		public const string LevelSelectionView = "UI/LevelSelectionView";
 
 		// Levels
 		public const string LevelPrefabPath = "Levels/Level";

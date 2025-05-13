@@ -13,10 +13,10 @@ using VContainer.Unity;
 
 namespace ROC.UI
 {
-	public class UIService : IUIService, IInitializable, IDisposable
+	public class UIProvider : IUIProvider, IInitializable, IDisposable
 	{
-		private readonly Dictionary<Type, IPresenter> _activePresenters = new();
-		private readonly Dictionary<UILayer, List<IPresenter>> _layerPresenters = new();
+		private readonly Dictionary<Type, IPresenter<IView>> _activePresenters = new();
+		private readonly Dictionary<UILayer, List<IPresenter<IView>>> _layerPresenters = new();
 		private readonly Dictionary<UILayer, Transform> _layerRoots = new();
 		private readonly ILoggingService _logger;
 		private readonly IEventBus _eventBus;
@@ -25,7 +25,7 @@ namespace ROC.UI
 		private readonly IObjectResolver _container;
 		private readonly CancellationTokenSource _cts = new();
 
-		public UIService(
+		public UIProvider(
 			ILoggingService logger,
 			IEventBus eventBus,
 			IAssetsProvider assetsProvider,
@@ -41,7 +41,7 @@ namespace ROC.UI
 			// Initialize layer dictionaries
 			foreach (UILayer layer in Enum.GetValues(typeof(UILayer)))
 			{
-				_layerPresenters[layer] = new List<IPresenter>();
+				_layerPresenters[layer] = new List<IPresenter<IView>>();
 			}
 		}
 
@@ -77,19 +77,19 @@ namespace ROC.UI
 		}
 
 		public async UniTask<TPresenter> ShowWindow<TPresenter>(string viewAddress, UILayer layer = UILayer.Content, CancellationToken cancellationToken = default)
-			where TPresenter : IPresenter
+			where TPresenter : IPresenter<IView>
 		{
 			return await ShowWindowInternal<TPresenter>(viewAddress, layer, cancellationToken);
 		}
 
 		public async UniTask<TPresenter> ShowWindow<TPresenter>(AssetReference viewReference, UILayer layer = UILayer.Content, CancellationToken cancellationToken = default)
-			where TPresenter : IPresenter
+			where TPresenter : IPresenter<IView>
 		{
 			return await ShowWindowInternal<TPresenter>(viewReference, layer, cancellationToken);
 		}
 
 		private async UniTask<TPresenter> ShowWindowInternal<TPresenter>(object viewRefOrAddress, UILayer layer, CancellationToken cancellationToken)
-			where TPresenter : IPresenter
+			where TPresenter : IPresenter<IView>
 		{
 			try
 			{
@@ -189,16 +189,13 @@ namespace ROC.UI
 
 				if (view == null)
 				{
-					_logger.LogError("View prefab does not have a component implementing IView");
+					_logger.LogError("View prefab does not have a component inheriting from BaseView");
 					UnityEngine.Object.Destroy(viewInstance);
 					return null;
 				}
 
-				// If the view is a UIScreen, set its layer
-				if (view is IUIScreen screen)
-				{
-					screen.Layer = layer;
-				}
+				// Set the layer for the view
+				view.Layer = layer;
 
 				return view;
 			}
@@ -209,32 +206,55 @@ namespace ROC.UI
 			}
 		}
 
-		private async UniTask<TPresenter> CreatePresenterAsync<TPresenter>(IView view) where TPresenter : IPresenter
+		private async UniTask<TPresenter> CreatePresenterAsync<TPresenter>(IView view) where TPresenter : IPresenter<IView>
 		{
 			try
 			{
-				// Try to create using the DI container first by registering the view parameter
+				// Create a temporary scope with required dependencies
 				var scope = _container.CreateScope(builder =>
 				{
-					builder.RegisterInstance(view).AsImplementedInterfaces().AsSelf();
+					// Get presenter's required view type from its constructor
+					Type presenterType = typeof(TPresenter);
+					var constructors = presenterType.GetConstructors();
+
+					if (constructors.Length == 0)
+					{
+						_logger.LogError($"No public constructors found for presenter type {presenterType}");
+						return;
+					}
+
+					// Get the first constructor's parameter types
+					var constructorParams = constructors[0].GetParameters();
+
+					// Find the view parameter (should be the first one that implements IView)
+					var viewParam = constructorParams.FirstOrDefault(p =>
+						typeof(IView).IsAssignableFrom(p.ParameterType));
+
+					if (viewParam != null)
+					{
+						// Register the view specifically for the exact parameter type needed
+						builder.RegisterInstance(view).As(viewParam.ParameterType);
+					}
+					else
+					{
+						// Fallback - just register as IView if no specific view interface found
+						builder.RegisterInstance(view).As<IView>();
+					}
+
+					// Register the presenter type
+					builder.Register<TPresenter>(Lifetime.Transient);
 				});
 
-				// Try to resolve the presenter from the container
-				if (scope.TryResolve<TPresenter>(out var diPresenter))
+				// Resolve the presenter from the container
+				if (scope.TryResolve<TPresenter>(out var presenter))
 				{
-					return diPresenter;
+					return presenter;
 				}
 
-				// Fallback to creating it using reflection if the container couldn't do it
-				// Note: When using reflection, we're assuming a constructor with view and eventBus parameters
-				TPresenter presenter = (TPresenter)Activator.CreateInstance(typeof(TPresenter), view, _eventBus);
-
-				if (presenter == null)
-				{
-					_logger.LogError($"Failed to create presenter of type {typeof(TPresenter)}");
-				}
-
-				return presenter;
+				// If we still couldn't resolve it, log an error
+				_logger.LogError($"Failed to resolve presenter of type {typeof(TPresenter)} from container. " +
+					$"Make sure it has appropriate constructor parameters that VContainer can resolve.");
+				return default;
 			}
 			catch (Exception e)
 			{
@@ -243,7 +263,7 @@ namespace ROC.UI
 			}
 		}
 
-		private void RegisterPresenter(IPresenter presenter, UILayer layer)
+		private void RegisterPresenter(IPresenter<IView> presenter, UILayer layer)
 		{
 			// Add to active presenters dictionary
 			_activePresenters[presenter.GetType()] = presenter;
@@ -251,21 +271,21 @@ namespace ROC.UI
 			// Add to layer tracking
 			if (!_layerPresenters.ContainsKey(layer))
 			{
-				_layerPresenters[layer] = new List<IPresenter>();
+				_layerPresenters[layer] = new List<IPresenter<IView>>();
 			}
 			_layerPresenters[layer].Add(presenter);
 		}
 
 		private void DestroyViewInstance(IView view)
 		{
-			if (view is MonoBehaviour viewBehaviour && viewBehaviour != null && viewBehaviour.gameObject != null)
+			if (view != null && view.GameObject != null)
 			{
-				UnityEngine.Object.Destroy(viewBehaviour.gameObject);
+				UnityEngine.Object.Destroy(view.GameObject);
 			}
 		}
 
 		public async UniTask HideWindow<TPresenter>(CancellationToken cancellationToken = default)
-			where TPresenter : IPresenter
+			where TPresenter : IPresenter<IView>
 		{
 			if (!_activePresenters.TryGetValue(typeof(TPresenter), out var presenter))
 				return;
@@ -305,7 +325,7 @@ namespace ROC.UI
 		}
 
 		public async UniTask ReleaseWindow<TPresenter>(CancellationToken cancellationToken = default)
-			where TPresenter : IPresenter
+			where TPresenter : IPresenter<IView>
 		{
 			if (!_activePresenters.TryGetValue(typeof(TPresenter), out var presenter))
 				return;
@@ -333,7 +353,7 @@ namespace ROC.UI
 			}
 		}
 
-		private UILayer? FindPresenterLayer(IPresenter presenter)
+		private UILayer? FindPresenterLayer(IPresenter<IView> presenter)
 		{
 			foreach (var layerPair in _layerPresenters)
 			{
@@ -381,12 +401,12 @@ namespace ROC.UI
 			}
 		}
 
-		public TPresenter GetWindow<TPresenter>() where TPresenter : IPresenter
+		public TPresenter GetWindow<TPresenter>() where TPresenter : IPresenter<IView>
 		{
 			return _activePresenters.TryGetValue(typeof(TPresenter), out var presenter) ? (TPresenter)presenter : default;
 		}
 
-		public bool IsWindowActive<TPresenter>() where TPresenter : IPresenter
+		public bool IsWindowActive<TPresenter>() where TPresenter : IPresenter<IView>
 		{
 			return _activePresenters.ContainsKey(typeof(TPresenter));
 		}

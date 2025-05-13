@@ -1,20 +1,11 @@
 using ROC.UI.Common;
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace ROC.UI.HUD
+namespace ROC.UI.GameOver
 {
-	public interface IGameOverView : IView
-	{
-		void SetResult(bool isWin);
-		void SetScore(int score);
-		void SetLevel(int level);
-		void SetRestartButtonListener(System.Action callback);
-		void SetNextLevelButtonListener(System.Action callback);
-		void SetMainMenuButtonListener(System.Action callback);
-	}
-
 	public class GameOverView : BaseView, IGameOverView
 	{
 		[SerializeField] private GameObject _winContainer;
@@ -25,9 +16,11 @@ namespace ROC.UI.HUD
 		[SerializeField] private Button _nextLevelButton;
 		[SerializeField] private Button _mainMenuButton;
 
-		private System.Action _onRestartButtonClicked;
-		private System.Action _onNextLevelButtonClicked;
-		private System.Action _onMainMenuButtonClicked;
+		private Action _onRestartButtonClicked;
+		private Action _onNextLevelButtonClicked;
+		private Action _onMainMenuButtonClicked;
+
+		public GameObject GameObject => gameObject;
 
 		protected override void InitializeView()
 		{
@@ -62,17 +55,17 @@ namespace ROC.UI.HUD
 			_levelText.text = $"Level: {level + 1}";
 		}
 
-		public void SetRestartButtonListener(System.Action callback)
+		public void SetRestartButtonListener(Action callback)
 		{
 			_onRestartButtonClicked = callback;
 		}
 
-		public void SetNextLevelButtonListener(System.Action callback)
+		public void SetNextLevelButtonListener(Action callback)
 		{
 			_onNextLevelButtonClicked = callback;
 		}
 
-		public void SetMainMenuButtonListener(System.Action callback)
+		public void SetMainMenuButtonListener(Action callback)
 		{
 			_onMainMenuButtonClicked = callback;
 		}

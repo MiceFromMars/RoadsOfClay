@@ -7,10 +7,20 @@ using UnityEngine;
 namespace ROC.UI.Common
 {
 	/// <summary>
+	/// Interface for presenters with covariance support
+	/// </summary>
+	public interface IPresenter<out TView> : IDisposable where TView : IView
+	{
+		void Initialize();
+		UniTask Show(CancellationToken cancellationToken = default);
+		UniTask Hide(CancellationToken cancellationToken = default);
+	}
+
+	/// <summary>
 	/// Base implementation for all presenters in the MVP pattern
 	/// </summary>
 	/// <typeparam name="TView">The type of view this presenter is associated with</typeparam>
-	public abstract class BasePresenter<TView> : IPresenter where TView : IView
+	public abstract class BasePresenter<TView> : IPresenter<TView> where TView : IView
 	{
 		protected readonly TView _view;
 		protected readonly IEventBus _eventBus;
@@ -95,26 +105,20 @@ namespace ROC.UI.Common
 				UnsubscribeFromEvents();
 				OnDispose();
 
-				// Dispose the view if it's disposable
-				if (_view is IDisposable disposableView)
-				{
-					disposableView.Dispose();
-				}
+				// Dispose the view
+				_view.Dispose();
 
 				// Destroy the view GameObject if applicable
-				if (_view is MonoBehaviour viewBehaviour && viewBehaviour != null)
+				if (_view != null && _view.GameObject != null)
 				{
-					if (viewBehaviour.gameObject != null)
+					// Use Destroy or DestroyImmediate based on whether we're in play mode
+					if (Application.isPlaying)
 					{
-						// Use Destroy or DestroyImmediate based on whether we're in play mode
-						if (Application.isPlaying)
-						{
-							UnityEngine.Object.Destroy(viewBehaviour.gameObject);
-						}
-						else
-						{
-							UnityEngine.Object.DestroyImmediate(viewBehaviour.gameObject);
-						}
+						UnityEngine.Object.Destroy(_view.GameObject);
+					}
+					else
+					{
+						UnityEngine.Object.DestroyImmediate(_view.GameObject);
 					}
 				}
 			}

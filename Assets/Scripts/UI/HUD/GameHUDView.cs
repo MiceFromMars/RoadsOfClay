@@ -7,17 +7,6 @@ using UnityEngine.UI;
 
 namespace ROC.UI.HUD
 {
-	public interface IGameHUDView : IView
-	{
-		void SetLeftButtonListeners(Action onPress, Action onRelease);
-		void SetRightButtonListeners(Action onPress, Action onRelease);
-		void SetJumpButtonListeners(Action onPress, Action onRelease);
-		void UpdateLives(int current, int max);
-		void UpdateScore(int score);
-		void UpdateHeight(float height);
-		void UpdateSpeed(float speed);
-	}
-
 	public class GameHUDView : BaseView, IGameHUDView
 	{
 		[Header("Controls")]
@@ -42,6 +31,8 @@ namespace ROC.UI.HUD
 		private Action _onRightButtonReleased;
 		private Action _onJumpButtonPressed;
 		private Action _onJumpButtonReleased;
+
+		public GameObject GameObject => gameObject;
 
 		protected override void InitializeView()
 		{

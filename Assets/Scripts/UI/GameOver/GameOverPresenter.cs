@@ -3,7 +3,7 @@ using Cysharp.Threading.Tasks;
 using ROC.Core.Events;
 using ROC.UI.Common;
 
-namespace ROC.UI.HUD
+namespace ROC.UI.GameOver
 {
 	public class GameOverPresenter : BasePresenter<IGameOverView>
 	{
@@ -27,39 +27,30 @@ namespace ROC.UI.HUD
 			_view.SetMainMenuButtonListener(OnMainMenuClicked);
 		}
 
-		protected override void SubscribeToEvents()
+		public void SetGameOverData(bool isWin, int score, int levelIndex)
 		{
-			base.SubscribeToEvents();
+			IsWin = isWin;
+			Score = score;
+			LevelIndex = levelIndex;
 
-			_eventBus.Subscribe<GameOverScreenOpenedEvent>(OnGameOverScreenOpened);
-		}
+			// Fire the event instead of subscribing to it
+			_eventBus.Fire(new GameOverScreenOpenedEvent
+			{
+				IsWin = IsWin,
+				Score = Score,
+				LevelIndex = LevelIndex
+			});
 
-		protected override void UnsubscribeFromEvents()
-		{
-			base.UnsubscribeFromEvents();
-
-			_eventBus.Unsubscribe<GameOverScreenOpenedEvent>(OnGameOverScreenOpened);
-		}
-
-		public override async UniTask Show(CancellationToken cancellationToken = default)
-		{
 			// Update view with current data
 			_view.SetResult(IsWin);
 			_view.SetScore(Score);
 			_view.SetLevel(LevelIndex);
-
-			await base.Show(cancellationToken);
 		}
 
-		private void OnGameOverScreenOpened(GameOverScreenOpenedEvent evt)
+		public override async UniTask Show(CancellationToken cancellationToken = default)
 		{
-			IsWin = evt.IsWin;
-			Score = evt.Score;
-			LevelIndex = evt.LevelIndex;
-
-			_view.SetResult(IsWin);
-			_view.SetScore(Score);
-			_view.SetLevel(LevelIndex);
+			// Update view with current data already done in SetGameOverData
+			await base.Show(cancellationToken);
 		}
 
 		private void OnRestartClicked()

@@ -7,9 +7,6 @@ using ROC.Game.Levels;
 using ROC.Game.Player;
 using ROC.Game.Enemy;
 using ROC.UI;
-using ROC.UI.HUD;
-using ROC.UI.MainMenu;
-using ROC.UI.MainMenu.LevelSelection;
 using UnityEngine;
 using VContainer;
 using VContainer.Unity;
@@ -37,6 +34,8 @@ namespace ROC.Core.DI
 		{
 			builder.Register<LoggingService>(Lifetime.Singleton).As<ILoggingService>();
 			builder.Register<EventBus>(Lifetime.Singleton).As<IEventBus>();
+
+			// Register GameStateMachine first using the new constructor
 			builder.Register<GameStateMachine>(Lifetime.Singleton);
 
 			builder.Register<AssetsProvider>(Lifetime.Singleton)
@@ -50,15 +49,10 @@ namespace ROC.Core.DI
 
 		private void RegisterUISystem(IContainerBuilder builder)
 		{
-			builder.Register<UIService>(Lifetime.Singleton)
+			builder.Register<UIProvider>(Lifetime.Singleton)
 				.WithParameter("uiRoot", _uiRoot)
-				.As<IUIService>()
+				.As<IUIProvider>()
 				.AsSelf();
-
-			builder.Register<MainMenuScreen>(Lifetime.Singleton);
-			builder.Register<LevelSelectionScreen>(Lifetime.Singleton);
-			builder.Register<GameHUD>(Lifetime.Singleton);
-			builder.Register<GameOverScreen>(Lifetime.Singleton);
 		}
 
 		private void RegisterGameSystems(IContainerBuilder builder)
@@ -72,9 +66,18 @@ namespace ROC.Core.DI
 
 		private void RegisterGameStates(IContainerBuilder builder)
 		{
-			builder.Register<BootstrapState>(Lifetime.Singleton);
-			builder.Register<MainMenuState>(Lifetime.Singleton);
-			builder.Register<GameplayState>(Lifetime.Singleton);
+			// Register all the states
+			builder.Register<BootstrapState>(Lifetime.Singleton)
+				.As<IState>()
+				.AsSelf();
+
+			builder.Register<MainMenuState>(Lifetime.Singleton)
+				.As<IState>()
+				.AsSelf();
+
+			builder.Register<GameplayState>(Lifetime.Singleton)
+				.As<IState>()
+				.AsSelf();
 		}
 	}
 }

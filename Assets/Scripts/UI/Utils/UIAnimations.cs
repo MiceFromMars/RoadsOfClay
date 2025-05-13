@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -107,9 +108,9 @@ namespace ROC.UI.Utils
 		}
 
 		/// <summary>
-		/// Performs typewriter effect on a Text component
+		/// Performs typewriter effect on a TextMeshProUGUI component
 		/// </summary>
-		public static async UniTask TypewriterEffect(this Text text, string finalText, float typingSpeed = 0.05f,
+		public static async UniTask TypewriterEffect(this TMP_Text text, string finalText, float typingSpeed = 0.05f,
 			CancellationToken cancellationToken = default)
 		{
 			string originalText = finalText;
@@ -123,6 +124,36 @@ namespace ROC.UI.Utils
 				text.text += originalText[i];
 				await UniTask.Delay(TimeSpan.FromSeconds(typingSpeed), cancellationToken: cancellationToken);
 			}
+		}
+
+		/// <summary>
+		/// Moves a RectTransform in an arc path from its current position to a target position
+		/// </summary>
+		public static async UniTask MoveInArc(this RectTransform rectTransform, Vector2 targetPosition, float arcHeight,
+			float duration = 0.5f, Ease ease = Ease.InOutSine, CancellationToken cancellationToken = default)
+		{
+			Vector2 startPos = rectTransform.anchoredPosition;
+
+			// Calculate a control point for the arc
+			Vector2 midPoint = (startPos + targetPosition) * 0.5f;
+
+			// Add a perpendicular offset for the control point
+			Vector2 direction = (targetPosition - startPos).normalized;
+			Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+			Vector2 controlPoint = midPoint + perpendicular * arcHeight;
+
+			// Create a path with the control point
+			Vector3[] path = new Vector3[3];
+			path[0] = startPos;
+			path[1] = controlPoint;
+			path[2] = targetPosition;
+
+			// Execute the movement with DOTween
+			Tween tween = rectTransform.DOPath(path, duration, PathType.CubicBezier)
+				.SetEase(ease)
+				.SetOptions(true);
+
+			await tween.ToUniTask(cancellationToken: cancellationToken);
 		}
 	}
 }

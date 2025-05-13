@@ -17,12 +17,14 @@ using UnityEngine.ResourceManagement.ResourceProviders;
 using ROC.Core.Assets;
 using ROC.UI;
 using ROC.UI.HUD;
+using ROC.UI.GameOver;
 
 namespace ROC.Core.StateMachine.States
 {
 	public class GameplayState : IPayloadedState<int>, IDisposable
 	{
-		private readonly GameStateMachine _stateMachine;
+		// Changed from readonly to allow property injection
+		private GameStateMachine _stateMachine;
 		private readonly ISaveLoadService _saveLoadService;
 		private readonly IEventBus _eventBus;
 		private readonly IObjectResolver _container;
@@ -32,7 +34,7 @@ namespace ROC.Core.StateMachine.States
 		private readonly IPlayerProvider _playerProvider;
 		private readonly ICameraProvider _cameraProvider;
 		private readonly IEnemyFactory _enemyFactory;
-		private readonly IUIService _uiService;
+		private readonly IUIProvider _uiProvider;
 
 		private PlayerBehavior _player;
 		private Camera _camera;
@@ -45,10 +47,14 @@ namespace ROC.Core.StateMachine.States
 		private int _currentScore;
 		private float _currentMaxHeight;
 		private float _currentMaxSpeed;
-		private GameHUD _gameHUD;
+
+		// Property for setting the state machine after construction
+		public GameStateMachine StateMachine
+		{
+			set { _stateMachine = value; }
+		}
 
 		public GameplayState(
-			GameStateMachine stateMachine,
 			ISaveLoadService saveLoadService,
 			IEventBus eventBus,
 			IObjectResolver container,
@@ -58,9 +64,8 @@ namespace ROC.Core.StateMachine.States
 			IPlayerProvider playerProvider,
 			ICameraProvider cameraProvider,
 			IEnemyFactory enemyFactory,
-			IUIService uiService)
+			IUIProvider uiProvider)
 		{
-			_stateMachine = stateMachine;
 			_saveLoadService = saveLoadService;
 			_eventBus = eventBus;
 			_container = container;
@@ -70,11 +75,13 @@ namespace ROC.Core.StateMachine.States
 			_playerProvider = playerProvider;
 			_cameraProvider = cameraProvider;
 			_enemyFactory = enemyFactory;
-			_uiService = uiService;
+			_uiProvider = uiProvider;
 		}
 
 		public async UniTask Enter(int levelIndex, CancellationToken cancellationToken)
 		{
+			_logger.Log($"GameplayState: Entering level {levelIndex}...");
+
 			_currentLevelIndex = levelIndex;
 			_gameplayCts = new CancellationTokenSource();
 			_isGameOver = false;
@@ -85,16 +92,20 @@ namespace ROC.Core.StateMachine.States
 			try
 			{
 				// Load progress data
+				_logger.Log("GameplayState: Loading progress data...");
 				_progressData = await _saveLoadService.LoadProgress(cancellationToken);
 
 				// Load gameplay scene
+				_logger.Log("GameplayState: Loading gameplay scene...");
 				await LoadGameplayScene(_gameplayCts.Token);
 
 				// Setup level
+				_logger.Log($"GameplayState: Loading level {_currentLevelIndex}...");
 				await _levelProvider.LoadLevel(_currentLevelIndex, _gameplayCts.Token);
 
 				// Show game HUD
-				_gameHUD = await _uiService.Show<GameHUD>("UI/GameHUD", _gameplayCts.Token);
+				_logger.Log("GameplayState: Showing game HUD...");
+				await _uiProvider.ShowWindow<GameHUDPresenter>("UI/GameHUD", UILayer.Content, _gameplayCts.Token);
 
 				// Initial UI updates
 				_eventBus.Fire(new PlayerLivesChangedEvent
@@ -108,6 +119,7 @@ namespace ROC.Core.StateMachine.States
 				_eventBus.Fire(new UI.SpeedChangedEvent { Speed = 0 });
 
 				// Create player
+				_logger.Log("GameplayState: Creating player...");
 				Vector3 spawnPosition = _levelProvider.CurrentLevel.GetPlayerSpawnPoint();
 				_player = await _playerProvider.CreatePlayer(spawnPosition, _gameplayCts.Token);
 
@@ -126,6 +138,7 @@ namespace ROC.Core.StateMachine.States
 				}
 
 				// Create camera
+				_logger.Log("GameplayState: Creating camera...");
 				_camera = await _cameraProvider.CreateCamera(_player.transform, _gameplayCts.Token);
 
 				if (_camera == null)
@@ -136,18 +149,23 @@ namespace ROC.Core.StateMachine.States
 				}
 
 				// Initialize enemy pools
+				_logger.Log("GameplayState: Initializing enemy pools...");
 				var spawnConfigs = _levelProvider.CurrentLevelConfig.EnemySpawnConfigs;
 				await _enemyFactory.InitializePoolsForLevel(spawnConfigs, _gameplayCts.Token);
 
 				// Start enemy spawning
+				_logger.Log("GameplayState: Starting enemy spawning...");
 				await _enemyFactory.StartSpawning(spawnConfigs, _gameplayCts.Token);
 
 				// Subscribe to events
+				_logger.Log("GameplayState: Subscribing to events...");
 				SubscribeToEvents();
+
+				_logger.Log("GameplayState: Level setup complete");
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError($"Error during gameplay initialization: {ex.Message}");
+				_logger.LogException(ex, "Error during gameplay initialization");
 				await ReturnToMainMenu();
 			}
 		}
@@ -192,10 +210,10 @@ namespace ROC.Core.StateMachine.States
 			UpdateProgressData(eventData.FinalScore, eventData.MaxHeight, eventData.MaxSpeed);
 
 			// Show game over screen
-			_uiService.Show<GameOverScreen>("UI/GameOverScreen", _gameplayCts.Token)
+			_uiProvider.ShowWindow<GameOverPresenter>("UI/GameOverScreen", UILayer.Content, _gameplayCts.Token)
 				.ContinueWith(screen =>
 				{
-					screen.Initialize(false, _currentLevelIndex, _currentScore);
+					screen.SetGameOverData(false, _currentLevelIndex, _currentScore);
 				})
 				.Forget();
 
@@ -305,10 +323,10 @@ namespace ROC.Core.StateMachine.States
 			UpdateProgressDataWithLevelCompletion();
 
 			// Show game over screen with win state
-			_uiService.Show<GameOverScreen>("UI/GameOverScreen", _gameplayCts.Token)
-				.ContinueWith(screen =>
+			_uiProvider.ShowWindow<GameOverPresenter>("UI/GameOverScreen", UILayer.Content, _gameplayCts.Token)
+				.ContinueWith(presenter =>
 				{
-					screen.Initialize(true, _currentLevelIndex, _currentScore);
+					presenter.SetGameOverData(true, _currentLevelIndex, _currentScore);
 				})
 				.Forget();
 
@@ -363,8 +381,8 @@ namespace ROC.Core.StateMachine.States
 			// Implement specific disconnections based on the actual methods available
 
 			// Hide UI
-			await _uiService.Hide<GameHUD>(cancellationToken);
-			await _uiService.Hide<GameOverScreen>(cancellationToken);
+			await _uiProvider.HideWindow<GameHUDPresenter>(cancellationToken);
+			await _uiProvider.HideWindow<GameOverPresenter>(cancellationToken);
 
 			// Clean up player
 			if (_player != null)

@@ -9,11 +9,20 @@ namespace ROC.Core.StateMachine
 {
 	public class GameStateMachine : IDisposable
 	{
-		private readonly Dictionary<Type, IState> _states;
+		private Dictionary<Type, IState> _states;
 		private readonly ILoggingService _logger;
 		private IState _currentState;
 		private CancellationTokenSource _stateCts;
 
+		// New constructor that doesn't require states upfront
+		public GameStateMachine(ILoggingService logger)
+		{
+			_states = new Dictionary<Type, IState>();
+			_logger = logger;
+			_stateCts = new CancellationTokenSource();
+		}
+
+		// Original constructor - kept for backward compatibility
 		public GameStateMachine(IReadOnlyList<IState> states, ILoggingService logger)
 		{
 			_states = new Dictionary<Type, IState>();
@@ -23,6 +32,20 @@ namespace ROC.Core.StateMachine
 				_states.Add(state.GetType(), state);
 
 			_stateCts = new CancellationTokenSource();
+		}
+
+		// Method to register states after construction
+		public void RegisterState(IState state)
+		{
+			if (state == null)
+				throw new ArgumentNullException(nameof(state));
+
+			Type stateType = state.GetType();
+
+			if (_states.ContainsKey(stateType))
+				_states[stateType] = state;  // Replace existing
+			else
+				_states.Add(stateType, state); // Add new
 		}
 
 		public async UniTask Enter<TState>() where TState : class, IState
@@ -63,7 +86,15 @@ namespace ROC.Core.StateMachine
 
 		private TState GetState<TState>() where TState : class, IState
 		{
-			return _states[typeof(TState)] as TState;
+			Type stateType = typeof(TState);
+
+			if (!_states.ContainsKey(stateType))
+			{
+				_logger.LogError($"State of type {stateType.Name} is not registered in the GameStateMachine.");
+				throw new KeyNotFoundException($"The given key '{stateType.FullName}' was not present in the dictionary.");
+			}
+
+			return _states[stateType] as TState;
 		}
 
 		public void Dispose()
