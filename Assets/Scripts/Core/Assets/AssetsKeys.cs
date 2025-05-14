@@ -27,6 +27,7 @@ namespace ROC.Core.Assets
 		public const string BossEnemy = "Enemies/BossEnemy";
 
 		//UI
+		public const string LoadingView = "LoadingView";
 		public const string MainMenuView = "MainMenuView";
 		public const string GameplayHUDView = "UI/GameplayHUDView";
 		public const string PauseMenuView = "UI/PauseMenuView";

@@ -52,6 +52,7 @@ namespace ROC.Core.DI
 			builder.Register<UIProvider>(Lifetime.Singleton)
 				.WithParameter("uiRoot", _uiRoot)
 				.As<IUIProvider>()
+				.As<IInitializable>()
 				.AsSelf();
 		}
 

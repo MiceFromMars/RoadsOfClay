@@ -98,27 +98,54 @@ namespace ROC.UI.Common
 
 			try
 			{
-				_cts.Cancel();
-				_cts.Dispose();
+				_cts?.Cancel();
+				_cts?.Dispose();
 				_cts = null;
 
 				UnsubscribeFromEvents();
 				OnDispose();
 
-				// Dispose the view
-				_view.Dispose();
-
-				// Destroy the view GameObject if applicable
-				if (_view != null && _view.GameObject != null)
+				// Handle view and its GameObject with extra care to avoid destroyed object access
+				if (_view != null)
 				{
-					// Use Destroy or DestroyImmediate based on whether we're in play mode
-					if (Application.isPlaying)
+					// Store the GameObject reference only if it's a valid UnityEngine.Object
+					GameObject viewGameObject = null;
+					bool isViewGameObjectValid = false;
+
+					try
 					{
-						UnityEngine.Object.Destroy(_view.GameObject);
+						// This might throw if the GameObject is already destroyed
+						viewGameObject = _view.GameObject;
+						isViewGameObjectValid = viewGameObject != null && viewGameObject;
 					}
-					else
+					catch (Exception)
 					{
-						UnityEngine.Object.DestroyImmediate(_view.GameObject);
+						// GameObject is already destroyed or invalid, so we can't use it
+						isViewGameObjectValid = false;
+					}
+
+					// First destroy the GameObject if needed and if it's still valid
+					if (isViewGameObjectValid)
+					{
+						if (Application.isPlaying)
+						{
+							UnityEngine.Object.Destroy(viewGameObject);
+						}
+						else
+						{
+							UnityEngine.Object.DestroyImmediate(viewGameObject);
+						}
+					}
+
+					// Then dispose the view after the GameObject is destroyed
+					// This way the view won't try to access a destroyed GameObject
+					try
+					{
+						_view.Dispose();
+					}
+					catch (Exception viewDisposeEx)
+					{
+						Debug.LogWarning($"Error disposing view: {viewDisposeEx.Message}");
 					}
 				}
 			}

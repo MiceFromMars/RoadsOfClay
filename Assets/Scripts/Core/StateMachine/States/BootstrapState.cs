@@ -3,6 +3,8 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using ROC.Core.Assets;
 using ROC.Data.SaveLoad;
+using ROC.UI;
+using ROC.UI.Loading;
 
 namespace ROC.Core.StateMachine.States
 {
@@ -12,6 +14,7 @@ namespace ROC.Core.StateMachine.States
 		private readonly ISaveLoadService _saveLoadService;
 		private readonly ILoggingService _logger;
 		private readonly IAssetsProvider _assetsProvider;
+		private readonly IUIProvider _uiProvider;
 
 		public GameStateMachine StateMachine
 		{
@@ -21,11 +24,13 @@ namespace ROC.Core.StateMachine.States
 		public BootstrapState(
 			IAssetsProvider assetsProvider,
 			ISaveLoadService saveLoadService,
-			ILoggingService logger)
+			ILoggingService logger,
+			IUIProvider uiProvider)
 		{
 			_saveLoadService = saveLoadService;
 			_logger = logger;
 			_assetsProvider = assetsProvider;
+			_uiProvider = uiProvider;
 		}
 
 		public async UniTask Enter(CancellationToken cancellationToken)
@@ -33,6 +38,9 @@ namespace ROC.Core.StateMachine.States
 			try
 			{
 				await _assetsProvider.InitializeAsync(cancellationToken);
+
+				// Show loading screen
+				await _uiProvider.ShowWindow<LoadingPresenter>(AssetsKeys.LoadingView, UILayer.Loading, cancellationToken);
 
 				await _saveLoadService.LoadProgress(cancellationToken);
 

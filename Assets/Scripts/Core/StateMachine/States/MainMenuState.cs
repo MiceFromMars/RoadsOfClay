@@ -54,6 +54,7 @@ namespace ROC.Core.StateMachine.States
 			// Show main menu UI
 			_logger.Log("MainMenuState: Showing main menu UI...");
 			await _uiProvider.ShowWindow<MainMenuPresenter>(AssetsKeys.MainMenuView, UILayer.Content, _cts.Token);
+			await _uiProvider.HideLayer(UILayer.Loading, _cts.Token);
 
 			// Subscribe to UI events
 			_logger.Log("MainMenuState: Subscribing to UI events...");
