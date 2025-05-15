@@ -10,6 +10,7 @@ namespace ROC.Game.Levels
 		[SerializeField] private Transform _rightBound;
 		[SerializeField] private Transform _upBound;
 		[SerializeField] private Transform _downBound;
+		[SerializeField] private Collider2D _cameraBounds;
 
 		public Vector3 GetPlayerSpawnPoint()
 		{
@@ -43,6 +44,11 @@ namespace ROC.Game.Levels
 				10f); // Using a default Z size
 
 			return new Bounds(center, size);
+		}
+
+		public Collider2D GetCameraBounds()
+		{
+			return _cameraBounds;
 		}
 	}
 }

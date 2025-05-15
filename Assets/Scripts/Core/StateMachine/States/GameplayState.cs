@@ -1,47 +1,37 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using ROC.Core.Events;
-using ROC.Data.Config;
 using ROC.Data.SaveLoad;
 using ROC.Game.Enemy;
 using ROC.Game.Levels;
-using ROC.Game.Player;
+using ROC.Game.PlayerBeh;
 using UnityEngine;
-using UnityEngine.SceneManagement;
-using VContainer;
 using VContainer.Unity;
-using UnityEngine.ResourceManagement.ResourceProviders;
 using ROC.Core.Assets;
 using ROC.UI;
 using ROC.UI.HUD;
 using ROC.UI.GameOver;
+using ROC.Game.Cam;
+using ROC.UI.Loading;
 
 namespace ROC.Core.StateMachine.States
 {
 	public class GameplayState : IPayloadedState<int>, IDisposable
 	{
-		// Changed from readonly to allow property injection
 		private GameStateMachine _stateMachine;
 		private readonly ISaveLoadService _saveLoadService;
 		private readonly IEventBus _eventBus;
-		private readonly IObjectResolver _container;
 		private readonly ILevelProvider _levelProvider;
-		private readonly IAssetsProvider _assetsProvider;
 		private readonly ILoggingService _logger;
 		private readonly IPlayerProvider _playerProvider;
 		private readonly ICameraProvider _cameraProvider;
 		private readonly IEnemyFactory _enemyFactory;
 		private readonly IUIProvider _uiProvider;
 
-		private PlayerBehavior _player;
-		private Camera _camera;
-		private PlayerInputHandler _inputHandler;
 		private PlayerProgressData _progressData;
 		private CancellationTokenSource _gameplayCts;
-		private SceneInstance _gameplaySceneInstance;
 		private int _currentLevelIndex;
 		private bool _isGameOver;
 		private int _currentScore;
@@ -57,9 +47,7 @@ namespace ROC.Core.StateMachine.States
 		public GameplayState(
 			ISaveLoadService saveLoadService,
 			IEventBus eventBus,
-			IObjectResolver container,
 			ILevelProvider levelProvider,
-			IAssetsProvider assetsProvider,
 			ILoggingService logger,
 			IPlayerProvider playerProvider,
 			ICameraProvider cameraProvider,
@@ -68,9 +56,7 @@ namespace ROC.Core.StateMachine.States
 		{
 			_saveLoadService = saveLoadService;
 			_eventBus = eventBus;
-			_container = container;
 			_levelProvider = levelProvider;
-			_assetsProvider = assetsProvider;
 			_logger = logger;
 			_playerProvider = playerProvider;
 			_cameraProvider = cameraProvider;
@@ -83,7 +69,7 @@ namespace ROC.Core.StateMachine.States
 			_logger.Log($"GameplayState: Entering level {levelIndex}...");
 
 			_currentLevelIndex = levelIndex;
-			_gameplayCts = new CancellationTokenSource();
+			_gameplayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 			_isGameOver = false;
 			_currentScore = 0;
 			_currentMaxHeight = 0;
@@ -91,96 +77,37 @@ namespace ROC.Core.StateMachine.States
 
 			try
 			{
-				// Load progress data
-				_logger.Log("GameplayState: Loading progress data...");
-				_progressData = await _saveLoadService.LoadProgress(cancellationToken);
+				await LoadProgressData(_gameplayCts.Token);
 
-				// Load gameplay scene
-				_logger.Log("GameplayState: Loading gameplay scene...");
-				await LoadGameplayScene(_gameplayCts.Token);
+				await SetupLevel(_gameplayCts.Token);
 
-				// Setup level
-				_logger.Log($"GameplayState: Loading level {_currentLevelIndex}...");
-				await _levelProvider.LoadLevel(_currentLevelIndex, _gameplayCts.Token);
+				await SetupPlayer(_gameplayCts.Token);
 
-				// Show game HUD
-				_logger.Log("GameplayState: Showing game HUD...");
-				await _uiProvider.ShowWindow<GameHUDPresenter>("UI/GameHUD", UILayer.Content, _gameplayCts.Token);
+				await SetupCamera(_gameplayCts.Token);
 
-				// Initial UI updates
-				_eventBus.Fire(new PlayerLivesChangedEvent
-				{
-					CurrentLives = 3, // Default value, replace with actual player lives from config
-					MaxLives = 3      // Default value, replace with actual max lives from config
-				});
+				await SetupHUD(_gameplayCts.Token);
 
-				_eventBus.Fire(new UI.ScoreChangedEvent { Score = 0 });
-				_eventBus.Fire(new UI.HeightChangedEvent { Height = 0 });
-				_eventBus.Fire(new UI.SpeedChangedEvent { Speed = 0 });
+				await InitializeUIData(_gameplayCts.Token);
 
-				// Create player
-				_logger.Log("GameplayState: Creating player...");
-				Vector3 spawnPosition = _levelProvider.CurrentLevel.GetPlayerSpawnPoint();
-				_player = await _playerProvider.CreatePlayer(spawnPosition, _gameplayCts.Token);
+				await SetupEnemiesSpawning(_gameplayCts.Token);
 
-				if (_player == null)
-				{
-					_logger.LogError("Failed to create player");
-					await ReturnToMainMenu();
-					return;
-				}
-
-				// Setup input handler with GameHUD
-				_inputHandler = UnityEngine.Object.FindObjectOfType<PlayerInputHandler>();
-				if (_inputHandler != null)
-				{
-					_inputHandler.Initialize(_player);
-				}
-
-				// Create camera
-				_logger.Log("GameplayState: Creating camera...");
-				_camera = await _cameraProvider.CreateCamera(_player.transform, _gameplayCts.Token);
-
-				if (_camera == null)
-				{
-					_logger.LogError("Failed to create camera");
-					await ReturnToMainMenu();
-					return;
-				}
-
-				// Initialize enemy pools
-				_logger.Log("GameplayState: Initializing enemy pools...");
-				var spawnConfigs = _levelProvider.CurrentLevelConfig.EnemySpawnConfigs;
-				await _enemyFactory.InitializePoolsForLevel(spawnConfigs, _gameplayCts.Token);
-
-				// Start enemy spawning
-				_logger.Log("GameplayState: Starting enemy spawning...");
-				await _enemyFactory.StartSpawning(spawnConfigs, _gameplayCts.Token);
-
-				// Subscribe to events
-				_logger.Log("GameplayState: Subscribing to events...");
 				SubscribeToEvents();
+
+				await _uiProvider.HideLayer(UILayer.Loading, _gameplayCts.Token);
 
 				_logger.Log("GameplayState: Level setup complete");
 			}
+			catch (OperationCanceledException)
+			{
+				// Setup was intentionally cancelled, no need to log
+				_logger.Log("GameplayState: Setup was cancelled");
+			}
 			catch (Exception ex)
 			{
-				_logger.LogException(ex, "Error during gameplay initialization");
-				await ReturnToMainMenu();
+				_logger.LogException(ex, "Unexpected error during gameplay initialization");
+
+				await HandleSetupFailure();
 			}
-		}
-
-		private async UniTask LoadGameplayScene(CancellationToken cancellationToken)
-		{
-			// Load scene through AssetsProvider
-			var sceneInstance = await _assetsProvider.LoadSceneAsync(AssetsKeys.Gameplay, LoadSceneMode.Single, cancellationToken);
-
-			if (!sceneInstance.Scene.IsValid())
-			{
-				throw new Exception($"Failed to load gameplay scene: {AssetsKeys.Gameplay}");
-			}
-
-			_gameplaySceneInstance = sceneInstance;
 		}
 
 		private void SubscribeToEvents()
@@ -210,7 +137,7 @@ namespace ROC.Core.StateMachine.States
 			UpdateProgressData(eventData.FinalScore, eventData.MaxHeight, eventData.MaxSpeed);
 
 			// Show game over screen
-			_uiProvider.ShowWindow<GameOverPresenter>("UI/GameOverScreen", UILayer.Content, _gameplayCts.Token)
+			_uiProvider.ShowWindow<GameOverPresenter>(AssetsKeys.GameOverView, UILayer.Content, _gameplayCts.Token)
 				.ContinueWith(screen =>
 				{
 					screen.SetGameOverData(false, _currentLevelIndex, _currentScore);
@@ -248,8 +175,15 @@ namespace ROC.Core.StateMachine.States
 			}
 		}
 
+		private async UniTask HandleSetupFailure()
+		{
+			_gameplayCts.Cancel();
+			await ReturnToMainMenu();
+		}
+
 		private async UniTask ReturnToMainMenu()
 		{
+			UnsubscribeFromEvents();
 			await _stateMachine.Enter<MainMenuState>();
 		}
 
@@ -323,7 +257,7 @@ namespace ROC.Core.StateMachine.States
 			UpdateProgressDataWithLevelCompletion();
 
 			// Show game over screen with win state
-			_uiProvider.ShowWindow<GameOverPresenter>("UI/GameOverScreen", UILayer.Content, _gameplayCts.Token)
+			_uiProvider.ShowWindow<GameOverPresenter>(AssetsKeys.GameOverView, UILayer.Content, _gameplayCts.Token)
 				.ContinueWith(presenter =>
 				{
 					presenter.SetGameOverData(true, _currentLevelIndex, _currentScore);
@@ -352,8 +286,10 @@ namespace ROC.Core.StateMachine.States
 			_stateMachine.Enter<GameplayState, int>(evt.LevelIndex).Forget();
 		}
 
-		private void OnNextLevel(NextLevelEvent evt)
+		private async void OnNextLevel(NextLevelEvent evt)
 		{
+			await _uiProvider.ShowWindow<LoadingPresenter>(AssetsKeys.Loading, UILayer.Loading);
+
 			_stateMachine.Enter<GameplayState, int>(evt.LevelIndex).Forget();
 		}
 
@@ -366,49 +302,25 @@ namespace ROC.Core.StateMachine.States
 
 		public async UniTask Exit(CancellationToken cancellationToken)
 		{
-			await CleanupResources(cancellationToken);
+			UnsubscribeFromEvents();
+
+			await _uiProvider.HideLayer(UILayer.Content, cancellationToken);
+
+			if (_playerProvider.CurrentPlayer != null)
+			{
+				_playerProvider.CurrentPlayer.gameObject.SetActive(false);
+			}
+
+			if (_cameraProvider.CurrentCamera != null)
+			{
+				_cameraProvider.CurrentCamera.gameObject.SetActive(false);
+			}
+
+			await _levelProvider.UnloadLevel(cancellationToken);
+
 			_gameplayCts?.Cancel();
 			_gameplayCts?.Dispose();
 			_gameplayCts = null;
-		}
-
-		private async UniTask CleanupResources(CancellationToken cancellationToken)
-		{
-			// Unsubscribe from events
-			UnsubscribeFromEvents();
-
-			// Note: Disconnect UI button handlers from input handler here
-			// Implement specific disconnections based on the actual methods available
-
-			// Hide UI
-			await _uiProvider.HideWindow<GameHUDPresenter>(cancellationToken);
-			await _uiProvider.HideWindow<GameOverPresenter>(cancellationToken);
-
-			// Clean up player
-			if (_player != null)
-			{
-				await _playerProvider.DestroyPlayer(cancellationToken);
-				_player = null;
-			}
-
-			// Clean up camera
-			if (_camera != null)
-			{
-				await _cameraProvider.DestroyCamera(cancellationToken);
-				_camera = null;
-			}
-
-			// Clean up input handler reference
-			_inputHandler = null;
-
-			// Clean up level
-			await _levelProvider.UnloadLevel(cancellationToken);
-
-			// Unload gameplay scene
-			if (_gameplaySceneInstance.Scene.IsValid())
-			{
-				await _assetsProvider.UnloadSceneAsync(_gameplaySceneInstance, cancellationToken);
-			}
 		}
 
 		private void UpdateProgressDataWithLevelCompletion()
@@ -459,5 +371,148 @@ namespace ROC.Core.StateMachine.States
 			// Ensure we clean up the cancellation token source
 			_gameplayCts?.Dispose();
 		}
+
+		#region Player Creation
+		private async UniTask<Player> CreatePlayerAtSpawnPoint(CancellationToken cancellationToken)
+		{
+			_logger.Log("GameplayState: Creating player...");
+			Vector3 spawnPosition = _levelProvider.CurrentLevel.GetPlayerSpawnPoint();
+			return await _playerProvider.CreatePlayer(spawnPosition, cancellationToken);
+		}
+
+		private void ResetPlayerAtSpawnPoint()
+		{
+			Vector3 spawnPosition = _levelProvider.CurrentLevel.GetPlayerSpawnPoint();
+			_playerProvider.CurrentPlayer.ResetPlayer(spawnPosition);
+		}
+
+		private async UniTask SetupPlayer(CancellationToken cancellationToken)
+		{
+			// Create player
+			if (_playerProvider.CurrentPlayer == null)
+			{
+				await CreatePlayerAtSpawnPoint(cancellationToken);
+			}
+			else
+			{
+				ResetPlayerAtSpawnPoint();
+			}
+
+			if (_playerProvider.CurrentPlayer == null)
+			{
+				_logger.LogError("Player is null after creation attempt");
+				await HandleSetupFailure();
+				throw new OperationCanceledException(cancellationToken);
+			}
+		}
+		#endregion
+
+		#region Camera Creation
+		private async UniTask SetupCamera(CancellationToken cancellationToken)
+		{
+			// Create camera
+			if (_cameraProvider.CurrentCamera == null)
+			{
+				_logger.Log("GameplayState: Creating camera...");
+				await _cameraProvider.CreateCamera(cancellationToken);
+			}
+
+			if (_cameraProvider.CurrentCamera != null && _playerProvider.CurrentPlayer != null)
+			{
+				_cameraProvider.SetTarget(_playerProvider.CurrentPlayer.transform);
+			}
+			else if (_cameraProvider.CurrentCamera == null)
+			{
+				_logger.LogError("Camera is null after creation attempt");
+				await HandleSetupFailure();
+				throw new OperationCanceledException(cancellationToken);
+			}
+		}
+		#endregion
+
+		#region Setup
+		private async UniTask LoadProgressData(CancellationToken cancellationToken)
+		{
+			_logger.Log("GameplayState: Loading progress data...");
+			_progressData = await _saveLoadService.LoadProgress(cancellationToken);
+		}
+
+		private async UniTask SetupLevel(CancellationToken cancellationToken)
+		{
+			_logger.Log($"GameplayState: Loading level {_currentLevelIndex}...");
+			await _levelProvider.LoadLevel(_currentLevelIndex, cancellationToken);
+
+			if (_levelProvider.CurrentLevel == null)
+			{
+				_logger.LogError("Level is null after loading attempt");
+				await HandleSetupFailure();
+				throw new OperationCanceledException(cancellationToken);
+			}
+
+			if (_levelProvider.CurrentLevelConfig == null)
+			{
+				_logger.LogError("Level config is null after loading attempt");
+				await HandleSetupFailure();
+				throw new OperationCanceledException(cancellationToken);
+			}
+		}
+
+		private async UniTask SetupHUD(CancellationToken cancellationToken)
+		{
+			_logger.Log("GameplayState: Showing game HUD...");
+			var hudPresenter = await _uiProvider.ShowWindow<GameHUDPresenter>(AssetsKeys.GameplayHUDView, UILayer.Content, cancellationToken);
+
+			if (hudPresenter == null)
+			{
+				_logger.LogError("HUD presenter is null after creation attempt");
+				await HandleSetupFailure();
+				throw new OperationCanceledException(cancellationToken);
+			}
+		}
+
+		private async UniTask InitializeUIData(CancellationToken cancellationToken)
+		{
+			var config = await _playerProvider.GetPlayerConfig(cancellationToken);
+
+			if (config == null)
+			{
+				_logger.LogError("Player config is null after retrieval attempt");
+				await HandleSetupFailure();
+				throw new OperationCanceledException(cancellationToken);
+			}
+
+			// Initial UI updates
+			_eventBus.Fire(new PlayerLivesChangedEvent
+			{
+				CurrentLives = config.StartLives,
+				MaxLives = config.StartLives
+			});
+
+			_eventBus.Fire(new UI.ScoreChangedEvent { Score = 0 });
+			_eventBus.Fire(new UI.HeightChangedEvent { Height = 0 });
+			_eventBus.Fire(new UI.SpeedChangedEvent { Speed = 0 });
+		}
+
+		private async UniTask SetupEnemiesSpawning(CancellationToken cancellationToken)
+		{
+			// Initialize enemy pools
+			_logger.Log("GameplayState: Initializing enemy pools...");
+			var spawnConfigs = _levelProvider.CurrentLevelConfig.EnemySpawnConfigs;
+
+			if (spawnConfigs == null)
+			{
+				_logger.LogError("Enemy spawn configs are null");
+				await HandleSetupFailure();
+				throw new OperationCanceledException(cancellationToken);
+			}
+
+			await _enemyFactory.InitializePoolsForLevel(spawnConfigs, cancellationToken);
+
+			// Start enemy spawning
+			_logger.Log("GameplayState: Starting enemy spawning...");
+			await _enemyFactory.StartSpawning(spawnConfigs, cancellationToken);
+		}
+		#endregion
+
 	}
 }

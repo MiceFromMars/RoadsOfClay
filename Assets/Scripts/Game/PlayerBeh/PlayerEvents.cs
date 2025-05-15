@@ -1,6 +1,6 @@
 using ROC.Core.Events;
 
-namespace ROC.Game.Player
+namespace ROC.Game.PlayerBeh
 {
 	public readonly struct PlayerDamagedEvent : IEvent
 	{

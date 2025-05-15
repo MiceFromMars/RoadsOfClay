@@ -1,30 +1,30 @@
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using ROC.Core.Events;
+using ROC.Game.PlayerInput;
 using ROC.UI.Common;
+using VContainer;
 
 namespace ROC.UI.HUD
 {
 	public class GameHUDPresenter : BasePresenter<IGameHUDView>
 	{
+		private readonly IInputProvider _inputProvider;
+
 		public int CurrentLives { get; private set; }
 		public int MaxLives { get; private set; }
 		public int Score { get; private set; }
 		public float Height { get; private set; }
 		public float Speed { get; private set; }
 
-		// Events for input handling
-		public event System.Action OnLeftButtonPressed;
-		public event System.Action OnLeftButtonReleased;
-		public event System.Action OnRightButtonPressed;
-		public event System.Action OnRightButtonReleased;
-		public event System.Action OnJumpButtonPressed;
-		public event System.Action OnJumpButtonReleased;
-
+		[Inject]
 		public GameHUDPresenter(
 			IGameHUDView view,
-			IEventBus eventBus) : base(view, eventBus)
+			IEventBus eventBus,
+			IInputProvider inputProvider) : base(view, eventBus)
 		{
+			_inputProvider = inputProvider;
+
 			// Initialize default values
 			CurrentLives = 3;
 			MaxLives = 3;
@@ -75,32 +75,32 @@ namespace ROC.UI.HUD
 		// Event handlers for view interactions
 		private void OnLeftButtonPressedHandler()
 		{
-			OnLeftButtonPressed?.Invoke();
+			_inputProvider.HandleHUDInput(InputType.Left, true);
 		}
 
 		private void OnLeftButtonReleasedHandler()
 		{
-			OnLeftButtonReleased?.Invoke();
+			_inputProvider.HandleHUDInput(InputType.Left, false);
 		}
 
 		private void OnRightButtonPressedHandler()
 		{
-			OnRightButtonPressed?.Invoke();
+			_inputProvider.HandleHUDInput(InputType.Right, true);
 		}
 
 		private void OnRightButtonReleasedHandler()
 		{
-			OnRightButtonReleased?.Invoke();
+			_inputProvider.HandleHUDInput(InputType.Right, false);
 		}
 
 		private void OnJumpButtonPressedHandler()
 		{
-			OnJumpButtonPressed?.Invoke();
+			_inputProvider.HandleHUDInput(InputType.Jump, true);
 		}
 
 		private void OnJumpButtonReleasedHandler()
 		{
-			OnJumpButtonReleased?.Invoke();
+			_inputProvider.HandleHUDInput(InputType.Jump, false);
 		}
 
 		// Event handlers for game state updates

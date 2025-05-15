@@ -32,6 +32,7 @@ namespace ROC.UI.MainMenu
 
 		private void OnPlayButtonClicked()
 		{
+			Debug.Log("MainMenuPresenter: Play button clicked");
 			_eventBus.Fire(new LevelSelectedEvent { LevelIndex = 0 });
 		}
 

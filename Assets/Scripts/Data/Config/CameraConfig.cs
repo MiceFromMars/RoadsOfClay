@@ -9,10 +9,12 @@ namespace ROC.Data.Config
 		[SerializeField] private float _lookAheadDistance = 2.0f;
 		[SerializeField] private float _verticalOffset = 1.0f;
 		[SerializeField] private float _followDamping = 0.1f;
+		[SerializeField] private float _confinerDamping = 0.2f;
 
 		public float FollowSpeed => _followSpeed;
 		public float LookAheadDistance => _lookAheadDistance;
 		public float VerticalOffset => _verticalOffset;
 		public float FollowDamping => _followDamping;
+		public float ConfinerDamping => _confinerDamping;
 	}
 }

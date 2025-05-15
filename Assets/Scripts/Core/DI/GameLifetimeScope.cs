@@ -3,9 +3,11 @@ using ROC.Core.Events;
 using ROC.Core.StateMachine;
 using ROC.Core.StateMachine.States;
 using ROC.Data.SaveLoad;
+using ROC.Game.PlayerInput;
 using ROC.Game.Levels;
-using ROC.Game.Player;
+using ROC.Game.PlayerBeh;
 using ROC.Game.Enemy;
+using ROC.Game.Cam;
 using ROC.UI;
 using UnityEngine;
 using VContainer;
@@ -45,6 +47,10 @@ namespace ROC.Core.DI
 			builder.Register<SaveLoadService>(Lifetime.Singleton)
 				.As<ISaveLoadService>()
 				.AsSelf();
+
+			builder.Register<InputProvider>(Lifetime.Singleton)
+				.As<IInputProvider>()
+				.As<ITickable>();
 		}
 
 		private void RegisterUISystem(IContainerBuilder builder)

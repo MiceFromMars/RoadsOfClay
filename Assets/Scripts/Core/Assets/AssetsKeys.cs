@@ -3,10 +3,9 @@ namespace ROC.Core.Assets
 	public static class AssetsKeys
 	{
 		// Config files
-		public const string PlayerConfig = "Configs/PlayerConfig";
-		public const string CameraConfig = "Configs/CameraConfig";
-		public const string LevelConfig = "Configs/LevelConfig";
-		public const string EnemyConfig = "Configs/EnemyConfig";
+		public const string PlayerConfig = "PlayerConfig";
+		public const string CameraConfig = "CameraConfig";
+		public const string LevelConfig = "LC";
 
 		// Game scenes
 		public const string MainMenu = "MainMenu";
@@ -14,10 +13,10 @@ namespace ROC.Core.Assets
 		public const string Loading = "Loading";
 
 		//Player
-		public const string Player = "Prefabs/Player";
+		public const string Player = "Player";
 
 		//Camera
-		public const string Camera = "Prefabs/Camera";
+		public const string Camera = "Camera";
 
 		//Enemies
 		public const string BasicEnemy = "Enemies/BasicEnemy";
@@ -35,7 +34,7 @@ namespace ROC.Core.Assets
 		public const string LevelSelectionView = "UI/LevelSelectionView";
 
 		// Levels
-		public const string LevelPrefabPath = "Levels/Level";
+		public const string LevelPrefabPath = "Lvl";
 
 		// Labels
 		public const string Levels = "Levels";

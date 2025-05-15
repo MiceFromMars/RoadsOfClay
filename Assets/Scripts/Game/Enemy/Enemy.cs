@@ -1,7 +1,7 @@
 using System;
 using ROC.Data.Config;
 using UnityEngine;
-using ROC.Game.Player;
+using ROC.Game.PlayerBeh;
 
 namespace ROC.Game.Enemy
 {
@@ -63,7 +63,7 @@ namespace ROC.Game.Enemy
 		{
 			if (collision.gameObject.CompareTag("Player"))
 			{
-				if (collision.gameObject.TryGetComponent(out PlayerBehavior player))
+				if (collision.gameObject.TryGetComponent(out Player player))
 				{
 					player.TakeDamage(1);
 				}

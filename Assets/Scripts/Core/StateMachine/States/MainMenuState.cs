@@ -5,6 +5,7 @@ using ROC.Core.Events;
 using ROC.Data.Config;
 using ROC.Data.SaveLoad;
 using ROC.UI;
+using ROC.UI.Loading;
 using ROC.UI.MainMenu;
 using ROC.UI.MainMenu.LevelSelection;
 using VContainer;
@@ -90,8 +91,12 @@ namespace ROC.Core.StateMachine.States
 			_logger.Log("MainMenuState: Exited successfully");
 		}
 
-		private void OnLevelSelected(LevelSelectedEvent evt)
+		private async void OnLevelSelected(LevelSelectedEvent evt)
 		{
+			await _uiProvider.HideLayer(UILayer.Content, _cts.Token);
+
+			await _uiProvider.ShowWindow<LoadingPresenter>(AssetsKeys.LoadingView, UILayer.Loading, _cts.Token);
+
 			_logger.Log($"MainMenuState: Level {evt.LevelIndex} selected, transitioning to GameplayState...");
 			_stateMachine.Enter<GameplayState, int>(evt.LevelIndex).Forget();
 		}

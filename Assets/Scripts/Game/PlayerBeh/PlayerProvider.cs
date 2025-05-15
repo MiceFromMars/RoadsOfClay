@@ -5,29 +5,33 @@ using ROC.Core.Assets;
 using ROC.Data.Config;
 using UnityEngine;
 using VContainer;
+using VContainer.Unity;
 
-namespace ROC.Game.Player
+namespace ROC.Game.PlayerBeh
 {
 	public class PlayerProvider : IPlayerProvider
 	{
 		private readonly IAssetsProvider _assetsProvider;
 		private readonly ILoggingService _logger;
+		private readonly IObjectResolver _container;
 
 		private PlayerConfig _playerConfig;
 		private GameObject _playerInstance;
 
-		public PlayerBehavior CurrentPlayer { get; private set; }
+		public Player CurrentPlayer { get; private set; }
 
 		[Inject]
 		public PlayerProvider(
 			IAssetsProvider assetsProvider,
-			ILoggingService logger)
+			ILoggingService logger,
+			IObjectResolver container)
 		{
 			_assetsProvider = assetsProvider;
 			_logger = logger;
+			_container = container;
 		}
 
-		public async UniTask<PlayerBehavior> CreatePlayer(Vector3 position, CancellationToken cancellationToken)
+		public async UniTask<Player> CreatePlayer(Vector3 position, CancellationToken cancellationToken)
 		{
 			if (CurrentPlayer != null)
 			{
@@ -52,19 +56,25 @@ namespace ROC.Game.Player
 				// Position the player
 				_playerInstance.transform.position = position;
 
+				// Create a scope with the PlayerConfig for injection
+				var scope = _container.CreateScope(builder =>
+				{
+					builder.RegisterInstance(_playerConfig);
+				});
+
+				// Inject dependencies using the scoped container
+				scope.InjectGameObject(_playerInstance);
+
 				// Get and initialize the player behavior
-				CurrentPlayer = _playerInstance.GetComponent<PlayerBehavior>();
+				CurrentPlayer = _playerInstance.GetComponent<Player>();
 
 				if (CurrentPlayer == null)
 				{
-					_logger.LogError("Player prefab does not have a PlayerBehavior component");
+					_logger.LogError("Player prefab does not have a Player component");
 					GameObject.Destroy(_playerInstance);
 					_playerInstance = null;
 					return null;
 				}
-
-				// Initialize player with config
-				CurrentPlayer.Initialize(_playerConfig);
 
 				return CurrentPlayer;
 			}
